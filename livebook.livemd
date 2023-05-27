@@ -1,0 +1,376 @@
+# R for Data Science
+
+```elixir
+Mix.install([
+  {:vega_lite, "~> 0.1.6"},
+  {:kino_vega_lite, "~> 0.1.7"},
+  {:explorer, "~> 0.5.5"},
+  {:kino_explorer, "~> 0.1.4"}
+])
+```
+
+## Intro
+
+```elixir
+alias Explorer.DataFrame, as: DF
+require Explorer.DataFrame
+```
+
+Exporing LiveBook using [R for Data Science](https://r4ds.hadley.nz/).
+
+## Chapter 2 - Data Vizualization
+
+Export penguins dataset from R and save as a csv.
+
+```elixir
+file = Path.join(__DIR__, "penguins.csv")
+df = DF.from_csv!(file)
+```
+
+```elixir
+VegaLite.new(
+  width: 400,
+  height: 400,
+  title: ["Body Mass and Flipper Length", "Dimensions for Adelie, Chinstrap, and Gentoo Penguins"]
+)
+|> VegaLite.data_from_values(df, only: ["flipper_length_mm", "body_mass_g", "species"])
+|> VegaLite.mark(:point)
+|> VegaLite.encode_field(:x, "flipper_length_mm",
+  title: "Flipper length (mm)",
+  type: :quantitative,
+  scale: [domain: [170, 240]]
+)
+|> VegaLite.encode_field(:y, "body_mass_g",
+  title: "Body mass (g)",
+  type: :quantitative,
+  scale: [domain: [2500, 6500]]
+)
+|> VegaLite.encode_field(:color, "species", type: :nominal)
+|> VegaLite.encode_field(:shape, "species", type: :nominal)
+```
+
+### Notes
+
+Need to use regression analysis to add smooth line because VegaLite doesn't have the capability.
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## Chapter 4 - Data Transformation
+
+Export nycflights13 dataset from R and save as a csv.
+
+```elixir
+file = Path.join(__DIR__, "nycflights13.csv")
+df = DF.from_csv!(file)
+```
+
+### Filter
+
+```elixir
+DF.filter(df, dep_delay > 120)
+```
+
+```elixir
+DF.filter(df, [month == 1, day == 1])
+```
+
+```elixir
+DF.filter(df, month in [1, 2])
+```
+
+### Arrange
+
+```elixir
+DF.arrange(df, [year, month, day, dep_time])
+```
+
+```elixir
+DF.arrange(df, desc: dep_delay)
+```
+
+### Distinct
+
+```elixir
+DF.distinct(df)
+```
+
+```elixir
+DF.distinct(df, ["origin", "dest"])
+```
+
+```elixir
+DF.distinct(df, ["origin", "dest"], keep_all: true)
+```
+
+```elixir
+df
+|> DF.group_by(["origin", "dest"])
+|> DF.summarise(total: count(origin))
+|> DF.arrange(desc: total)
+```
+
+### Exercises
+
+```elixir
+DF.filter(df, arr_delay >= 120) |> DF.arrange(arr_delay)
+```
+
+```elixir
+DF.filter(df, dest in ["IAH", "HOU"])
+```
+
+```elixir
+DF.filter(df, carrier in ["UA", "AA", "DL"])
+```
+
+```elixir
+DF.filter(df, month in [7, 8, 9])
+```
+
+```elixir
+df
+|> DF.filter(arr_delay > 120)
+|> DF.filter(dep_delay <= 0)
+```
+
+```elixir
+df
+|> DF.filter(dep_delay > 60)
+|> DF.filter(arr_delay < 30)
+```
+
+```elixir
+DF.arrange(df, desc: dep_delay)
+```
+
+```elixir
+df
+|> DF.drop_nil("dep_time")
+|> DF.arrange(dep_time)
+```
+
+```elixir
+df
+|> DF.mutate(mph: distance / (air_time / 60))
+|> DF.drop_nil("mph")
+|> DF.arrange(desc: mph)
+```
+
+```elixir
+df
+|> DF.distinct(["month", "day"])
+|> DF.n_rows()
+```
+
+```elixir
+DF.arrange(df, asc: distance)
+```
+
+```elixir
+DF.arrange(df, desc: distance)
+```
+
+### Columns
+
+```elixir
+df
+|> DF.mutate(gain: dep_delay - arr_delay, speed: distance / air_time * 60)
+```
+
+```elixir
+DF.select(df, ["year", "month", "day"])
+```
+
+```elixir
+DF.select(df, fn name, _type -> name not in ["year", "month", "day"] end)
+```
+
+```elixir
+DF.select(df, fn _name, type -> type == :string end)
+```
+
+```elixir
+df
+|> DF.select("tailnum")
+|> DF.rename(tailnum: "tail_num")
+```
+
+### Exercises
+
+```elixir
+DF.select(df, ["dep_time", "sched_dep_time", "dep_delay"])
+```
+
+```elixir
+DF.select(df, ["tailnum", "tailnum"])
+```
+
+```elixir
+variables = ["year", "month", "day", "dep_delay", "arr_delay"]
+DF.select(df, fn name, _type -> name in variables end)
+```
+
+```elixir
+DF.rename(df, air_time: "air_time_min")
+```
+
+### The Pipe
+
+```elixir
+df
+|> DF.filter(dest == "IAH")
+|> DF.mutate(speed: distance / air_time * 60)
+|> DF.select(["year", "month", "day", "dep_time", "carrier", "flight", "speed"])
+|> DF.arrange(desc: speed)
+```
+
+### Groups
+
+```elixir
+DF.group_by(df, "month")
+```
+
+```elixir
+df
+|> DF.group_by("month")
+|> DF.summarise(avg_delay: mean(dep_delay), total_count: count(month))
+|> DF.arrange(month)
+```
+
+### Slice
+
+```elixir
+df
+|> DF.group_by("dest")
+|> DF.arrange(desc: arr_delay)
+|> DF.slice([0])
+|> DF.ungroup()
+|> DF.arrange(dest)
+```
+
+```elixir
+df
+|> DF.group_by(["year", "month", "day"])
+|> DF.arrange(desc: arr_delay)
+|> DF.slice([0])
+|> DF.ungroup()
+|> DF.arrange(asc: month, asc: day)
+```
+
+### Exercises
+
+```elixir
+df
+|> DF.group_by("carrier")
+|> DF.summarise(avg_delay: mean(arr_delay))
+|> DF.arrange(desc: avg_delay)
+```
+
+```elixir
+df
+|> DF.group_by("dest")
+|> DF.summarise(avg_delay: mean(arr_delay))
+|> DF.arrange(desc: avg_delay)
+```
+
+```elixir
+df
+|> DF.group_by(["carrier", "dest"])
+|> DF.summarise(total: count(tailnum))
+```
+
+```elixir
+df
+|> DF.arrange(dep_delay)
+|> DF.group_by(["dest"])
+|> DF.slice([0])
+|> DF.ungroup()
+|> DF.arrange(asc: dest)
+```
+
+```elixir
+df
+|> DF.arrange(dep_delay)
+|> DF.group_by(["dest", "flight"])
+|> DF.summarise(avg_delay: mean(dep_delay))
+|> DF.group_by(["dest"])
+|> DF.slice([0])
+|> DF.ungroup()
+|> DF.arrange(asc: dest)
+```
+
+```elixir
+df_delay =
+  df
+  |> DF.group_by("hour")
+  |> DF.summarise(avg_delay_mins: mean(dep_delay))
+  |> DF.drop_nil("avg_delay_mins")
+```
+
+<!-- livebook:{"attrs":{"chart_title":"Delays During the Day","height":400,"layers":[{"active":true,"chart_type":"bar","color_field":null,"color_field_aggregate":null,"color_field_bin":null,"color_field_scale_scheme":null,"color_field_type":null,"data_variable":"df_delay","geodata_color":"blue","latitude_field":null,"longitude_field":null,"x_field":"hour","x_field_aggregate":null,"x_field_bin":null,"x_field_scale_type":null,"x_field_type":"quantitative","y_field":"avg_delay_mins","y_field_aggregate":null,"y_field_bin":null,"y_field_scale_type":null,"y_field_type":"quantitative"}],"vl_alias":"Elixir.VegaLite","width":400},"chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
+
+```elixir
+VegaLite.new(width: 400, height: 400, title: "Delays During the Day")
+|> VegaLite.data_from_values(df_delay, only: ["hour", "avg_delay_mins"])
+|> VegaLite.mark(:bar)
+|> VegaLite.encode_field(:x, "hour", type: :quantitative)
+|> VegaLite.encode_field(:y, "avg_delay_mins", type: :quantitative)
+```
+
+```elixir
+df2 = DF.new(x: 1..5, y: ["a", "b", "a", "a", "b"], z: ["K", "K", "L", "L", "K"])
+```
+
+```elixir
+DF.group_by(df2, "y")
+```
+
+```elixir
+DF.arrange(df2, y)
+```
+
+```elixir
+df2
+|> DF.group_by("y")
+|> DF.summarise(mean_x: mean(x))
+```
+
+```elixir
+df2
+|> DF.group_by(["y", "z"])
+|> DF.summarise(mean_x: mean(x))
+```
+
+```elixir
+df2
+|> DF.group_by(["y", "z"])
+|> DF.mutate(mean_x: mean(x))
+```
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## 4.6 Case study: aggregates and sample size
+
+```elixir
+file = Path.join(__DIR__, "batting.csv")
+df = DF.from_csv!(file)
+```
+
+```elixir
+batters =
+  df
+  |> DF.group_by("playerID")
+  |> DF.summarise(performance: sum(col("H")) / sum(col("AB")), total_abs: sum(col("AB")))
+  |> DF.arrange(playerID)
+  |> DF.filter(total_abs > 100)
+```
+
+<!-- livebook:{"attrs":{"chart_title":"Batter Performance","height":400,"layers":[{"active":true,"chart_type":"point","color_field":null,"color_field_aggregate":null,"color_field_bin":null,"color_field_scale_scheme":null,"color_field_type":null,"data_variable":"batters","geodata_color":"blue","latitude_field":null,"longitude_field":null,"x_field":"total_abs","x_field_aggregate":null,"x_field_bin":null,"x_field_scale_type":null,"x_field_type":"quantitative","y_field":"performance","y_field_aggregate":null,"y_field_bin":null,"y_field_scale_type":null,"y_field_type":"quantitative"}],"vl_alias":"Elixir.VegaLite","width":400},"chunks":null,"kind":"Elixir.KinoVegaLite.ChartCell","livebook_object":"smart_cell"} -->
+
+```elixir
+VegaLite.new(width: 400, height: 400, title: "Batter Performance")
+|> VegaLite.data_from_values(batters, only: ["total_abs", "performance"])
+|> VegaLite.mark(:point)
+|> VegaLite.encode_field(:x, "total_abs", type: :quantitative)
+|> VegaLite.encode_field(:y, "performance", type: :quantitative)
+```
