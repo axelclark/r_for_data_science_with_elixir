@@ -349,7 +349,7 @@ df2
 
 <!-- livebook:{"branch_parent_index":0} -->
 
-## 4.6 Case study: aggregates and sample size
+## Chapter 4.6 Case study: aggregates and sample size
 
 ```elixir
 file = Path.join(__DIR__, "batting.csv")
@@ -373,4 +373,177 @@ VegaLite.new(width: 400, height: 400, title: "Batter Performance")
 |> VegaLite.mark(:point)
 |> VegaLite.encode_field(:x, "total_abs", type: :quantitative)
 |> VegaLite.encode_field(:y, "performance", type: :quantitative)
+```
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## Chapter 6 Data Tidying
+
+```elixir
+table1_file = Path.join(__DIR__, "table1.csv")
+table1 = DF.from_csv!(table1_file)
+```
+
+```elixir
+DF.mutate(table1, rate: cases / population * 10000) |> DF.arrange(country)
+```
+
+```elixir
+table1
+|> DF.group_by("year")
+|> DF.summarise(total_cases: sum(cases))
+```
+
+```elixir
+table1_country =
+  table1
+  |> DF.group_by("country")
+
+VegaLite.new(width: 400, height: 400, title: "Cases")
+|> VegaLite.data_from_values(table1_country, only: ["year", "cases", "country"])
+|> VegaLite.mark(:line)
+|> VegaLite.encode_field(:x, "year",
+  type: :quantitative,
+  scale: [domain: [1999, 2000]],
+  axis: [round: true, values: [1999, 2000]]
+)
+|> VegaLite.encode_field(:y, "cases", type: :quantitative)
+|> VegaLite.encode_field(:detail, "country", type: :nominal)
+|> VegaLite.encode_field(:color, "country", type: :nominal)
+|> VegaLite.encode_field(:shape, "country", type: :nominal)
+```
+
+```elixir
+table2_file = Path.join(__DIR__, "table2.csv")
+table2 = DF.from_csv!(table2_file)
+```
+
+```elixir
+table3_file = Path.join(__DIR__, "table3.csv")
+table3 = DF.from_csv!(table3_file)
+```
+
+### 6.3.1 Data in column names
+
+```elixir
+billboard_file = Path.join(__DIR__, "billboard.csv")
+billboard = DF.from_csv!(billboard_file)
+```
+
+```elixir
+billboard =
+  Enum.reduce(66..76, billboard, fn num, acc ->
+    acc |> DF.mutate_with(&["wk#{num}": Explorer.Series.cast(&1[num], :integer)])
+  end)
+```
+
+```elixir
+billboard =
+  billboard
+  |> DF.pivot_longer(&String.starts_with?(&1, "wk"), names_to: "week", values_to: "rank")
+  |> DF.drop_nil("rank")
+```
+
+```elixir
+billboard_longer =
+  billboard
+  |> DF.put(
+    :week,
+    Explorer.Series.transform(billboard["week"], fn col ->
+      String.replace(col, "wk", "") |> String.to_integer()
+    end)
+  )
+```
+
+```elixir
+billboard_track =
+  billboard_longer
+  |> DF.group_by("track")
+
+VegaLite.new(width: 800, height: 400, title: "Billboard Chart")
+|> VegaLite.data_from_values(billboard_track, only: ["week", "rank", "track"])
+|> VegaLite.mark(:line)
+|> VegaLite.encode_field(:x, "week", type: :quantitative)
+|> VegaLite.encode_field(:y, "rank", type: :quantitative, scale: [reverse: true])
+|> VegaLite.encode_field(:detail, "track", type: :nominal)
+|> VegaLite.encode_field(:opacity, "0.25")
+```
+
+### 6.3.2 How does pivoting work?
+
+```elixir
+df = DF.new(id: ["A", "B", "C"], bp1: ["100", "140", "120"], bp2: ["120", "115", "125"])
+```
+
+```elixir
+DF.pivot_longer(df, ["bp1", "bp2"], names_to: "measurement", values_to: "value")
+```
+
+### 6.3.3 Many variables in column names
+
+```elixir
+who2_file = Path.join(__DIR__, "who2.csv")
+who2 = DF.from_csv!(who2_file)
+```
+
+```elixir
+who2_longer =
+  who2
+  |> DF.pivot_longer(fn col -> col not in ["country", "year"] end,
+    names_to: "categories",
+    values_to: "count"
+  )
+```
+
+```elixir
+who2_longer
+|> DF.put(
+  :diagnosis,
+  Explorer.Series.transform(who2_longer["categories"], fn col ->
+    [value | _] = String.split(col, "_")
+    value
+  end)
+)
+|> DF.put(
+  :gender,
+  Explorer.Series.transform(who2_longer["categories"], fn col ->
+    [_, value | _] = String.split(col, "_")
+    value
+  end)
+)
+|> DF.put(
+  :age,
+  Explorer.Series.transform(who2_longer["categories"], fn col ->
+    [_, _, value | _] = String.split(col, "_")
+    value
+  end)
+)
+```
+
+### 6.3.4 Data and variable names in the column headers
+
+```elixir
+household_file = Path.join(__DIR__, "household.csv")
+household = DF.from_csv!(household_file)
+```
+
+```elixir
+household
+|> DF.pivot_longer(fn col -> col not in ["family", "name_child1", "name_child2"] end,
+  names_to: "categories",
+  values_to: "dob"
+)
+|> DF.drop_nil("dob")
+```
+
+### 6.4 Widening data
+
+```elixir
+cms_file = Path.join(__DIR__, "cms_patient_experience.csv")
+cms = DF.from_csv!(cms_file)
+```
+
+```elixir
+cms
+|> DF.pivot_wider("measure_cd", "prf_rate", id_columns: ["org_pac_id", "org_nm"])
 ```
